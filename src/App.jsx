@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, Edit2, Trash2, X, Download, AlertCircle, Package, CheckCircle2, IndianRupee, TrendingUp, Filter } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Plus, Search, Edit2, Trash2, X, Download, Upload, Copy, AlertCircle, Package, CheckCircle2, IndianRupee, TrendingUp, Filter } from 'lucide-react';
 
 export default function AlittlePartCRM() {
   const [orders, setOrders] = useState([]);
@@ -9,14 +9,22 @@ export default function AlittlePartCRM() {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [viewMode, setViewMode] = useState('table');
+  const [copyStatus, setCopyStatus] = useState('Copy Status');
+  const restoreInputRef = useRef(null);
 
   const emptyForm = {
     id: '',
     deadline: '',
     customerName: '',
     contact: '',
+    source: '',
+    sourceDetail: '',
     productType: 'Magazine',
     numberOfPages: '',
+    quality: '',
+    size: '',
+    quantity: '',
     sellingPrice: '',
     cost: '',
     share: '',
@@ -25,7 +33,6 @@ export default function AlittlePartCRM() {
     deliveryDate: '',
     occasion: '',
     packaging: 'Regular',
-    otherProducts: '',
     status: 'Pending',
     orderDate: new Date().toISOString().split('T')[0],
     requirements: '',
@@ -46,11 +53,12 @@ export default function AlittlePartCRM() {
     headerBg: '#2C4A6B'
   };
 
+  // Use localStorage instead of a backend; data is scoped to this browser only.
   useEffect(() => {
     (async () => {
       try {
-        const result = await window.storage.get('alittlepart-orders');
-        if (result && result.value) setOrders(JSON.parse(result.value));
+        const result = localStorage.getItem('alittlepart-orders');
+        if (result) setOrders(JSON.parse(result));
       } catch (e) {}
       finally { setLoading(false); }
     })();
@@ -58,7 +66,7 @@ export default function AlittlePartCRM() {
 
   const saveOrders = async (newOrders) => {
     setOrders(newOrders);
-    try { await window.storage.set('alittlepart-orders', JSON.stringify(newOrders)); }
+    try { localStorage.setItem('alittlepart-orders', JSON.stringify(newOrders)); }
     catch (e) { console.error('Save failed', e); }
   };
 
@@ -70,7 +78,7 @@ export default function AlittlePartCRM() {
   };
 
   const getUrgency = (order) => {
-    if (order.status === 'Delivered') return 'done';
+    if (order.status === 'Completed') return 'done';
     const days = getDaysLeft(order.deadline);
     if (days === null) return 'normal';
     if (days < 0) return 'overdue';
@@ -82,8 +90,8 @@ export default function AlittlePartCRM() {
   // Summary stats
   const stats = useMemo(() => {
     const total = orders.length;
-    const pending = orders.filter(o => o.status !== 'Delivered').length;
-    const delivered = orders.filter(o => o.status === 'Delivered').length;
+    const pending = orders.filter(o => o.status !== 'Completed').length;
+    const delivered = orders.filter(o => o.status === 'Completed').length;
     const totalSelling = orders.reduce((s, o) => s + (parseFloat(o.sellingPrice) || 0), 0);
     const totalCost = orders.reduce((s, o) => s + (parseFloat(o.cost) || 0), 0);
     const totalShare = orders.reduce((s, o) => s + (parseFloat(o.share) || 0), 0);
@@ -114,8 +122,8 @@ export default function AlittlePartCRM() {
       }
     }
     list.sort((a, b) => {
-      if (a.status === 'Delivered' && b.status !== 'Delivered') return 1;
-      if (b.status === 'Delivered' && a.status !== 'Delivered') return -1;
+      if (a.status === 'Completed' && b.status !== 'Completed') return 1;
+      if (b.status === 'Completed' && a.status !== 'Completed') return -1;
       const da = getDaysLeft(a.deadline);
       const db = getDaysLeft(b.deadline);
       if (da === null) return 1;
@@ -124,6 +132,115 @@ export default function AlittlePartCRM() {
     });
     return list;
   }, [orders, search, filterStatus]);
+
+  const referralClients = useMemo(() => [...new Set(
+    orders
+      .map(order => (order.customerName || '').trim())
+      .filter(Boolean)
+  )].sort((a, b) => a.localeCompare(b)), [orders]);
+
+  const groupedOrders = useMemo(() => {
+    const groups = new Map();
+    filteredOrders.forEach(order => {
+      const key = `${(order.customerName || '').trim().toLowerCase()}|${order.contact || ''}|${order.deadline || ''}`;
+      if (!groups.has(key)) {
+        groups.set(key, {
+          customerName: order.customerName || '',
+          contact: order.contact || '',
+          deadline: order.deadline || '',
+          deliveryPlace: order.deliveryPlace || '',
+          deliveryDate: order.deliveryDate || '',
+          occasion: order.occasion || '',
+          orders: [],
+          totals: { sellingPrice: 0, cost: 0, share: 0, advancePaid: 0, balance: 0 }
+        });
+      }
+      const group = groups.get(key);
+      group.orders.push(order);
+      group.deliveryPlace = group.deliveryPlace === (order.deliveryPlace || '') ? group.deliveryPlace : '';
+      group.deliveryDate = group.deliveryDate === (order.deliveryDate || '') ? group.deliveryDate : '';
+      group.occasion = group.occasion === (order.occasion || '') ? group.occasion : '';
+      group.totals.sellingPrice += parseFloat(order.sellingPrice) || 0;
+      group.totals.cost += parseFloat(order.cost) || 0;
+      group.totals.share += parseFloat(order.share) || 0;
+      group.totals.advancePaid += parseFloat(order.advancePaid) || 0;
+      group.totals.balance += (parseFloat(order.sellingPrice) || 0) - (parseFloat(order.advancePaid) || 0);
+    });
+
+    return [...groups.values()].sort((a, b) => {
+      const aCompleted = a.orders.every(order => order.status === 'Completed');
+      const bCompleted = b.orders.every(order => order.status === 'Completed');
+      if (aCompleted && !bCompleted) return 1;
+      if (bCompleted && !aCompleted) return -1;
+      const da = getDaysLeft(a.deadline);
+      const db = getDaysLeft(b.deadline);
+      if (da === null) return 1;
+      if (db === null) return -1;
+      return da - db;
+    });
+  }, [filteredOrders]);
+
+  const getGroupUrgency = (group) => {
+    if (group.orders.every(order => order.status === 'Completed')) return 'done';
+    return getUrgency({ deadline: group.deadline, status: 'Pending' });
+  };
+
+  const getProductDetails = (order) => {
+    if (order.productType === 'Magazine' || order.productType === 'Photobook') {
+      return `Pages: ${order.numberOfPages || '-'} • Quality: ${order.quality || '-'}`;
+    }
+    if (order.productType === 'Premium Photobook (Only Matte)') {
+      return `Pages: ${order.numberOfPages || '-'}`;
+    }
+    if (order.productType === 'Fridge Magnet' || order.productType === 'Frame') {
+      return `Size: ${order.size || '-'} • Qty: ${order.quantity || '-'}`;
+    }
+    if (order.productType === 'Wallet Card') return `Qty: ${order.quantity || '-'}`;
+    return '';
+  };
+
+  const copyActiveStatus = async () => {
+    const buckets = [
+      { status: 'Pending', heading: 'PENDING ORDERS' },
+      { status: 'In Progress', heading: 'IN PROGRESS ORDERS' },
+      { status: 'Ready', heading: 'READY ORDERS' },
+      { status: 'Delivered', heading: 'DELIVERED (PAYMENT PENDING)' }
+    ];
+    const formatOrder = order => {
+      const deadline = order.deadline ? fmtDate(order.deadline) : 'No deadline';
+      const details = getProductDetails(order);
+      return `- ${order.customerName || 'Unnamed client'} | ${order.productType || 'Unspecified product'} | ${deadline}${details ? ` | ${details}` : ''}`;
+    };
+    const sortByDeadline = (a, b) => {
+      const aDays = getDaysLeft(a.deadline);
+      const bDays = getDaysLeft(b.deadline);
+      if (aDays === null) return 1;
+      if (bDays === null) return -1;
+      return aDays - bDays;
+    };
+    const sections = buckets.map(bucket => {
+      const bucketOrders = orders.filter(order => order.status === bucket.status).sort(sortByDeadline);
+      if (bucketOrders.length === 0) return '';
+      return `${bucket.heading}\n${bucketOrders.map(formatOrder).join('\n')}`;
+    }).filter(Boolean);
+
+    if (sections.length === 0) {
+      alert('No active orders to share.');
+      return;
+    }
+
+    const summary = sections.join('\n\n');
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard API unavailable');
+      await navigator.clipboard.writeText(summary);
+      setCopyStatus('Copied!');
+      setTimeout(() => setCopyStatus('Copy Status'), 1500);
+    } catch (e) {
+      window.prompt('Copy this order status summary:', summary);
+    }
+  };
+
+  const getSourceLabel = (order) => order.source ? `${order.source}${order.sourceDetail ? ` — ${order.sourceDetail}` : ''}` : '-';
 
   const openNewForm = () => {
     setEditingOrder(null);
@@ -138,8 +255,8 @@ export default function AlittlePartCRM() {
   };
 
   const handleSave = async () => {
-    if (!form.customerName || !form.deadline) {
-      alert('Please fill Customer Name and Deadline');
+    if (!form.customerName) {
+      alert('Please fill Customer Name');
       return;
     }
     const newOrders = editingOrder
@@ -160,14 +277,14 @@ export default function AlittlePartCRM() {
   };
 
   const exportCSV = () => {
-    const headers = ['Deadline', 'Client Name', 'Contact', 'Product Type', 'Pages', 'Selling Price', 'Cost', 'Share (Profit)', 'Advance', 'Balance', 'Delivery Place', 'Delivery Date', 'Occasion', 'Packaging', 'Status', 'Other Products', 'Requirements', 'Notes', 'Order Date'];
+    const headers = ['Deadline', 'Client Name', 'Contact', 'Source', 'Source Detail', 'Product Type', 'Pages', 'Selling Price', 'Cost', 'Share (Profit)', 'Advance', 'Balance', 'Delivery Place', 'Delivery Date', 'Occasion', 'Packaging', 'Status', 'Requirements', 'Notes', 'Order Date'];
     const rows = filteredOrders.map(o => {
       const balance = (parseFloat(o.sellingPrice) || 0) - (parseFloat(o.advancePaid) || 0);
       return [
-        o.deadline || '', o.customerName || '', o.contact || '', o.productType || '',
+        o.deadline || '', o.customerName || '', o.contact || '', o.source || '', o.sourceDetail || '', o.productType || '',
         o.numberOfPages || '', o.sellingPrice || '', o.cost || '', o.share || '',
         o.advancePaid || '', balance, o.deliveryPlace || '', o.deliveryDate || '',
-        o.occasion || '', o.packaging || '', o.status || '', o.otherProducts || '',
+        o.occasion || '', o.packaging || '', o.status || '',
         o.requirements || '', o.notes || '', o.orderDate || ''
       ];
     });
@@ -184,6 +301,41 @@ export default function AlittlePartCRM() {
     a.download = `alittlepart-orders-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const backupOrders = () => {
+    const json = JSON.stringify(orders, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `alittlepart-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const restoreOrders = (event) => {
+    const file = event.target.files[0];
+    event.target.value = '';
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (loadEvent) => {
+      try {
+        const restoredOrders = JSON.parse(loadEvent.target.result);
+        if (!Array.isArray(restoredOrders)) {
+          alert('Restore failed: the JSON file must contain an array of orders.');
+          return;
+        }
+        if (window.confirm('This will overwrite all current orders. Continue?')) {
+          await saveOrders(restoredOrders);
+        }
+      } catch (e) {
+        alert('Restore failed: the selected file is not valid JSON.');
+      }
+    };
+    reader.onerror = () => alert('Restore failed: the file could not be read.');
+    reader.readAsText(file);
   };
 
   const getRowStyle = (urgency) => {
@@ -224,10 +376,10 @@ export default function AlittlePartCRM() {
 
         {/* Summary Metrics — Excel style */}
         <div className="bg-white rounded-lg shadow-sm overflow-hidden mb-5">
-          <div className="grid grid-cols-3 md:grid-cols-6 divide-x divide-y md:divide-y-0" style={{ borderColor: colors.creamDark }}>
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-px" style={{ backgroundColor: colors.creamDark }}>
             <MetricCell label="Total Orders" value={stats.total} color={colors.text} />
             <MetricCell label="Pending Orders" value={stats.pending} color="#DC2626" />
-            <MetricCell label="Delivered" value={stats.delivered} color="#059669" />
+            <MetricCell label="Completed" value={stats.delivered} color="#059669" />
             <MetricCell label="Total Selling ₹" value={fmtMoney(stats.totalSelling)} color={colors.coralDark} />
             <MetricCell label="Total Cost ₹" value={fmtMoney(stats.totalCost)} color="#B45309" />
             <MetricCell label="Total Share ₹" value={fmtMoney(stats.totalShare)} color="#059669" highlight />
@@ -235,45 +387,95 @@ export default function AlittlePartCRM() {
         </div>
 
         {/* Toolbar */}
-        <div className="flex flex-col md:flex-row gap-2 mb-3">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: colors.textLight }} />
-            <input
-              type="text"
-              placeholder="Search client, phone, place, occasion..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2"
-              style={{ borderColor: colors.coralLight, backgroundColor: 'white', color: colors.text }}
-            />
-          </div>
-          <select
-            value={filterStatus}
-            onChange={e => setFilterStatus(e.target.value)}
-            className="px-3 py-2 rounded-lg border text-sm bg-white focus:outline-none focus:ring-2"
-            style={{ borderColor: colors.coralLight, color: colors.text }}
-          >
+        <div className="flex flex-col gap-2 mb-3 md:flex-row md:flex-nowrap md:items-center">
+          <div className="flex flex-col gap-2 sm:flex-row md:flex-1 md:min-w-0">
+            <div className="relative flex-1 min-w-0">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: colors.textLight }} />
+              <input
+                type="text"
+                placeholder="Search client, phone, place, occasion..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2"
+                style={{ borderColor: colors.coralLight, backgroundColor: 'white', color: colors.text }}
+              />
+            </div>
+            <select
+              value={filterStatus}
+              onChange={e => setFilterStatus(e.target.value)}
+              className="w-full sm:w-auto md:w-36 px-3 py-2 rounded-lg border text-sm bg-white focus:outline-none focus:ring-2"
+              style={{ borderColor: colors.coralLight, color: colors.text }}
+            >
             <option value="all">All Orders</option>
             <option value="urgent">🔴 Urgent (≤3 days)</option>
             <option value="Pending">Pending</option>
             <option value="In Progress">In Progress</option>
             <option value="Ready">Ready</option>
+            <option value="Couriered">Couriered</option>
             <option value="Delivered">Delivered</option>
-          </select>
-          <button
-            onClick={exportCSV}
-            className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm border font-medium transition hover:bg-white"
-            style={{ borderColor: colors.coralLight, color: colors.coralDark, backgroundColor: 'white' }}
-          >
-            <Download className="w-4 h-4" /> Export CSV
-          </button>
-          <button
-            onClick={openNewForm}
-            className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium transition hover:shadow-md"
-            style={{ backgroundColor: colors.coral }}
-          >
-            <Plus className="w-4 h-4" /> New Order
-          </button>
+            <option value="Completed">Completed</option>
+            </select>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 md:flex-nowrap md:shrink-0">
+            <div className="flex flex-wrap items-center gap-2 md:flex-nowrap">
+              <button
+                onClick={exportCSV}
+                title="Export CSV"
+                className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs border font-medium whitespace-nowrap transition hover:bg-white"
+                style={{ borderColor: colors.coralLight, color: colors.coralDark, backgroundColor: 'white' }}
+              >
+                <Download className="w-3.5 h-3.5" /> Export CSV
+              </button>
+              <button
+                onClick={backupOrders}
+                title="Backup"
+                className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs border font-medium whitespace-nowrap transition hover:bg-white"
+                style={{ borderColor: colors.coralLight, color: colors.coralDark, backgroundColor: 'white' }}
+              >
+                <Download className="w-3.5 h-3.5" /> Backup
+              </button>
+              <button
+                onClick={copyActiveStatus}
+                title="Copy Status"
+                className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs border font-medium whitespace-nowrap transition hover:bg-white"
+                style={{ borderColor: colors.coralLight, color: colors.coralDark, backgroundColor: 'white' }}
+              >
+                <Copy className="w-3.5 h-3.5" /> {copyStatus}
+              </button>
+              <button
+                onClick={() => restoreInputRef.current?.click()}
+                title="Restore"
+                className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs border font-medium whitespace-nowrap transition hover:bg-white"
+                style={{ borderColor: colors.coralLight, color: colors.coralDark, backgroundColor: 'white' }}
+              >
+                <Upload className="w-3.5 h-3.5" /> Restore
+              </button>
+              <input ref={restoreInputRef} type="file" accept=".json" onChange={restoreOrders} className="hidden" />
+            </div>
+            <div className="flex items-center border rounded-full overflow-hidden whitespace-nowrap" style={{ borderColor: colors.coralLight }}>
+            <button
+              onClick={() => setViewMode('table')}
+              className="px-3 py-2 text-xs font-medium transition"
+              style={{ backgroundColor: viewMode === 'table' ? colors.coralPale : 'white', color: colors.coralDark }}
+            >
+              Table View
+            </button>
+            <button
+              onClick={() => setViewMode('grouped')}
+              className="px-3 py-2 text-xs font-medium transition"
+              style={{ backgroundColor: viewMode === 'grouped' ? colors.coralPale : 'white', color: colors.coralDark }}
+            >
+              Grouped View
+            </button>
+            </div>
+            <button
+              onClick={openNewForm}
+              className="flex w-full md:w-auto items-center justify-center gap-2 px-4 py-2 rounded-lg text-white text-sm font-medium whitespace-nowrap transition hover:shadow-md"
+              style={{ backgroundColor: colors.coral }}
+            >
+              <Plus className="w-4 h-4" /> New Order
+            </button>
+          </div>
         </div>
 
         {/* Orders Section Title */}
@@ -288,6 +490,70 @@ export default function AlittlePartCRM() {
             <p style={{ color: colors.textLight }}>
               {orders.length === 0 ? "No orders yet. Click 'New Order' to get started!" : "No orders match your filter."}
             </p>
+          </div>
+        ) : viewMode === 'grouped' ? (
+          <div className="space-y-3">
+            {groupedOrders.map(group => {
+              const urgency = getGroupUrgency(group);
+              const groupStyle = getRowStyle(urgency);
+              const days = getDaysLeft(group.deadline);
+              return (
+                <div key={`${group.customerName}|${group.contact}|${group.deadline}`} className="rounded-lg border shadow-sm overflow-hidden" style={groupStyle}>
+                  <div className="px-4 py-3 border-b flex flex-wrap items-center justify-between gap-2" style={{ borderColor: colors.coralLight }}>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <div className="font-bold" style={{ color: colors.text }}>{group.customerName || 'Unnamed client'}</div>
+                        <span className="px-2 py-0.5 rounded text-xs" style={{ backgroundColor: colors.coralPale, color: colors.coralDark }}>
+                          {getSourceLabel(group.orders[0])}
+                        </span>
+                      </div>
+                      <div className="text-xs" style={{ color: colors.textLight }}>{group.contact || '-'}</div>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm" style={{ color: colors.text }}>
+                      <span>{fmtDate(group.deadline)}</span>
+                      <span className="px-2 py-0.5 rounded text-xs font-medium" style={{ backgroundColor: urgency === 'done' ? '#DCFCE7' : urgency === 'soon' ? '#FEF3C7' : urgency === 'urgent' || urgency === 'overdue' ? '#FEE2E2' : colors.coralPale, color: urgency === 'done' ? '#166534' : urgency === 'soon' ? '#92400E' : urgency === 'urgent' || urgency === 'overdue' ? '#991B1B' : colors.coralDark }}>
+                        {urgency === 'done' ? 'Completed' : urgency === 'overdue' ? 'Overdue' : urgency === 'urgent' ? 'Urgent' : urgency === 'soon' ? 'Soon' : 'Normal'}
+                      </span>
+                      {days !== null && urgency !== 'done' && (
+                        <span className="text-xs font-medium">{days < 0 ? `${Math.abs(days)}d overdue` : days === 0 ? 'Today!' : `${days}d left`}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="divide-y" style={{ borderColor: colors.coralLight }}>
+                    {group.orders.map(order => (
+                      <div key={order.id} className="px-4 py-2 flex flex-wrap items-center gap-2 text-sm">
+                        <span className="px-2 py-0.5 rounded text-xs" style={{ backgroundColor: colors.coralPale, color: colors.coralDark }}>{order.productType}</span>
+                        {getProductDetails(order) && <span className="text-xs" style={{ color: colors.textLight }}>{getProductDetails(order)}</span>}
+                        <span className="font-medium ml-auto" style={{ color: colors.text }}>₹{fmtMoney(order.sellingPrice)}</span>
+                        <select value={order.status} onChange={e => quickStatusChange(order.id, e.target.value)} className="text-xs px-2 py-1 rounded border bg-white cursor-pointer" style={{ borderColor: colors.coralLight, color: colors.text }}>
+                          <option>Pending</option>
+                          <option>In Progress</option>
+                          <option>Ready</option>
+                          <option>Couriered</option>
+                          <option>Delivered</option>
+                          <option>Completed</option>
+                        </select>
+                        <div className="flex gap-1">
+                          <button onClick={() => openEditForm(order)} className="p-1.5 rounded hover:bg-white" style={{ color: colors.coralDark }} title="Edit">
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => setConfirmDelete(order.id)} className="p-1.5 rounded hover:bg-white text-red-500" title="Delete">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="px-4 py-2 text-xs font-semibold flex flex-wrap gap-x-4 gap-y-1" style={{ backgroundColor: colors.coralPale, color: colors.text }}>
+                    <span>Selling: ₹{fmtMoney(group.totals.sellingPrice)}</span>
+                    <span>Cost: ₹{fmtMoney(group.totals.cost)}</span>
+                    <span>Share: ₹{fmtMoney(group.totals.share)}</span>
+                    <span>Advance: ₹{fmtMoney(group.totals.advancePaid)}</span>
+                    <span className={group.orders.every(order => order.status === 'Completed') ? 'text-green-700' : group.totals.balance > 0 ? 'text-red-600' : 'text-gray-500'}>Balance: ₹{fmtMoney(group.totals.balance)}</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div className="bg-white rounded-lg shadow-sm overflow-hidden">
@@ -307,6 +573,7 @@ export default function AlittlePartCRM() {
                     <Th align="right">Balance</Th>
                     <Th>Delivery Place</Th>
                     <Th>Occasion</Th>
+                    <Th>Source</Th>
                     <Th>Packaging</Th>
                     <Th>Status</Th>
                     <Th>Notes</Th>
@@ -323,7 +590,7 @@ export default function AlittlePartCRM() {
                       <tr key={order.id} style={rowStyle} className="border-b hover:bg-opacity-80 transition">
                         <Td>
                           <div className="font-medium" style={{ color: colors.text }}>{fmtDate(order.deadline)}</div>
-                          {days !== null && order.status !== 'Delivered' && (
+                          {days !== null && order.status !== 'Completed' && (
                             <div className={`text-xs ${days < 0 ? 'text-red-600 font-bold' : days <= 3 ? 'text-red-500 font-semibold' : days <= 7 ? 'text-amber-600' : 'text-gray-500'}`}>
                               {days < 0 ? `${Math.abs(days)}d overdue` : days === 0 ? 'Today!' : `${days}d left`}
                             </div>
@@ -341,9 +608,14 @@ export default function AlittlePartCRM() {
                         <Td align="right">{order.cost ? fmtMoney(order.cost) : '-'}</Td>
                         <Td align="right"><span className="font-semibold text-green-700">{order.share ? fmtMoney(order.share) : '-'}</span></Td>
                         <Td align="right">{order.advancePaid ? fmtMoney(order.advancePaid) : '-'}</Td>
-                        <Td align="right"><span className={balance > 0 ? 'font-semibold text-red-600' : 'text-gray-500'}>{fmtMoney(balance)}</span></Td>
+                        <Td align="right"><span className={order.status === 'Completed' ? 'font-semibold text-green-700' : balance > 0 ? 'font-semibold text-red-600' : 'text-gray-500'}>{fmtMoney(balance)}</span></Td>
                         <Td>{order.deliveryPlace || '-'}</Td>
                         <Td>{order.occasion || '-'}</Td>
+                        <Td>
+                          <span className="px-2 py-0.5 rounded text-xs" style={{ backgroundColor: colors.coralPale, color: colors.coralDark }}>
+                            {getSourceLabel(order)}
+                          </span>
+                        </Td>
                         <Td>
                           {order.packaging === 'Premium' ? (
                             <span className="px-2 py-0.5 rounded text-xs font-medium" style={{ backgroundColor: '#FEF3C7', color: '#92400E' }}>✨ Premium</span>
@@ -361,14 +633,15 @@ export default function AlittlePartCRM() {
                             <option>Pending</option>
                             <option>In Progress</option>
                             <option>Ready</option>
+                            <option>Couriered</option>
                             <option>Delivered</option>
+                            <option>Completed</option>
                           </select>
                         </Td>
                         <Td>
-                          <div className="max-w-[150px] truncate text-xs" title={order.notes || order.otherProducts || ''} style={{ color: colors.textLight }}>
-                            {order.otherProducts && <div>+{order.otherProducts}</div>}
+                          <div className="max-w-[150px] truncate text-xs" title={order.notes || ''} style={{ color: colors.textLight }}>
                             {order.notes && <div>{order.notes}</div>}
-                            {!order.notes && !order.otherProducts && '-'}
+                            {!order.notes && '-'}
                           </div>
                         </Td>
                         <Td>
@@ -402,8 +675,8 @@ export default function AlittlePartCRM() {
                     <Td align="right">{fmtMoney(filteredOrders.reduce((s, o) => s + (parseFloat(o.cost) || 0), 0))}</Td>
                     <Td align="right" className="text-green-700">{fmtMoney(filteredOrders.reduce((s, o) => s + (parseFloat(o.share) || 0), 0))}</Td>
                     <Td align="right">{fmtMoney(filteredOrders.reduce((s, o) => s + (parseFloat(o.advancePaid) || 0), 0))}</Td>
-                    <Td align="right" className="text-red-600">{fmtMoney(filteredOrders.reduce((s, o) => s + ((parseFloat(o.sellingPrice) || 0) - (parseFloat(o.advancePaid) || 0)), 0))}</Td>
-                    <Td colSpan={6}></Td>
+                    <Td align="right"><span className={filteredOrders.every(order => order.status === 'Completed') ? 'font-semibold text-green-700' : filteredOrders.reduce((s, o) => s + ((parseFloat(o.sellingPrice) || 0) - (parseFloat(o.advancePaid) || 0)), 0) > 0 ? 'font-semibold text-red-600' : 'text-gray-500'}>{fmtMoney(filteredOrders.reduce((s, o) => s + ((parseFloat(o.sellingPrice) || 0) - (parseFloat(o.advancePaid) || 0)), 0))}</span></Td>
+                    <Td colSpan={7}></Td>
                   </tr>
                 </tfoot>
               </table>
@@ -436,7 +709,42 @@ export default function AlittlePartCRM() {
                   <Field label="Contact Number">
                     <input type="tel" value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} className="input" />
                   </Field>
-                  <Field label="Deadline *">
+                  <Field label="Source">
+                    <select
+                      value={form.source}
+                      onChange={e => setForm({ ...form, source: e.target.value, sourceDetail: e.target.value === 'Known' || e.target.value === 'Referral' ? form.sourceDetail : '' })}
+                      className="input"
+                    >
+                      <option value="">Select source</option>
+                      <option>Instagram</option>
+                      <option>Known</option>
+                      <option>Referral</option>
+                    </select>
+                  </Field>
+                  {form.source === 'Known' && (
+                    <Field label="Known Person">
+                      <select value={form.sourceDetail} onChange={e => setForm({ ...form, sourceDetail: e.target.value })} className="input">
+                        <option value="">Select person</option>
+                        <option>Urvi</option>
+                        <option>Riddhi</option>
+                        <option>Divyesh</option>
+                      </select>
+                    </Field>
+                  )}
+                  {form.source === 'Referral' && (
+                    <Field label="Referring Client">
+                      <select
+                        value={form.sourceDetail}
+                        onChange={e => setForm({ ...form, sourceDetail: e.target.value })}
+                        className="input"
+                        disabled={referralClients.length === 0}
+                      >
+                        <option value="">{referralClients.length === 0 ? 'No clients yet' : 'Select referring client'}</option>
+                        {referralClients.map(client => <option key={client}>{client}</option>)}
+                      </select>
+                    </Field>
+                  )}
+                  <Field label="Deadline">
                     <input type="date" value={form.deadline} onChange={e => setForm({ ...form, deadline: e.target.value })} className="input" />
                   </Field>
                   <Field label="Delivery Date">
@@ -445,16 +753,35 @@ export default function AlittlePartCRM() {
                   <Field label="Product Type">
                     <select value={form.productType} onChange={e => setForm({ ...form, productType: e.target.value })} className="input">
                       <option>Magazine</option>
+                      <option>Photobook</option>
+                      <option>Premium Photobook (Only Matte)</option>
                       <option>Fridge Magnet</option>
-                      <option>Wallet Card</option>
                       <option>Frame</option>
+                      <option>Wallet Card</option>
                       <option>Combo Pack</option>
                       <option>Other</option>
                     </select>
                   </Field>
-                  <Field label="Number of Pages">
-                    <input type="number" value={form.numberOfPages} onChange={e => setForm({ ...form, numberOfPages: e.target.value })} className="input" />
-                  </Field>
+                  {(form.productType === 'Magazine' || form.productType === 'Photobook' || form.productType === 'Premium Photobook (Only Matte)') && (
+                    <Field label="Number of Pages">
+                      <input type="number" value={form.numberOfPages} onChange={e => setForm({ ...form, numberOfPages: e.target.value })} className="input" />
+                    </Field>
+                  )}
+                  {(form.productType === 'Magazine' || form.productType === 'Photobook') && (
+                    <Field label="Quality">
+                      <input type="text" value={form.quality} onChange={e => setForm({ ...form, quality: e.target.value })} className="input" placeholder="e.g., Glossy, Matte, Premium" />
+                    </Field>
+                  )}
+                  {(form.productType === 'Fridge Magnet' || form.productType === 'Frame') && (
+                    <Field label="Size">
+                      <input type="text" value={form.size} onChange={e => setForm({ ...form, size: e.target.value })} className="input" placeholder="e.g., 4x4 inch" />
+                    </Field>
+                  )}
+                  {(form.productType === 'Fridge Magnet' || form.productType === 'Frame' || form.productType === 'Wallet Card') && (
+                    <Field label="Quantity">
+                      <input type="number" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} className="input" />
+                    </Field>
+                  )}
                   <Field label="Selling Price (₹)">
                     <input type="number" value={form.sellingPrice} onChange={e => setForm({ ...form, sellingPrice: e.target.value })} className="input" />
                   </Field>
@@ -484,17 +811,15 @@ export default function AlittlePartCRM() {
                       <option>Pending</option>
                       <option>In Progress</option>
                       <option>Ready</option>
+                      <option>Couriered</option>
                       <option>Delivered</option>
+                      <option>Completed</option>
                     </select>
                   </Field>
                 </div>
 
                 <Field label="Full Delivery Address">
                   <textarea value={form.requirements} onChange={e => setForm({ ...form, requirements: e.target.value })} className="input" rows="2" placeholder="Full address / requirements" />
-                </Field>
-
-                <Field label="Other Products / Add-ons">
-                  <input type="text" value={form.otherProducts} onChange={e => setForm({ ...form, otherProducts: e.target.value })} className="input" placeholder="e.g., wallet card, 2 magnets, frame" />
                 </Field>
 
                 <Field label="Notes">
@@ -561,8 +886,8 @@ export default function AlittlePartCRM() {
 
 function MetricCell({ label, value, color, highlight }) {
   return (
-    <div className={`px-3 py-3 text-center ${highlight ? '' : ''}`} style={{ backgroundColor: highlight ? '#F0FDF4' : 'white' }}>
-      <div className="text-xs uppercase tracking-wide mb-1" style={{ color: '#8B6F6B' }}>{label}</div>
+    <div className={`px-3 py-4 text-center transition-colors duration-150 hover:bg-[#FCE8E3] ${highlight ? 'bg-[#F0FDF4]' : 'bg-white'}`}>
+      <div className="text-xs uppercase tracking-wide mb-1 font-medium" style={{ color: '#8B6F6B' }}>{label}</div>
       <div className="text-lg md:text-xl font-bold" style={{ color }}>{value}</div>
     </div>
   );
