@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Package } from 'lucide-react';
-import DashboardCards from './components/DashboardCards';
-import Toolbar from './components/Toolbar';
-import OrderTable from './components/OrderTable';
-import GroupedView from './components/GroupedView';
+import { Boxes, LayoutDashboard, Package, Users } from 'lucide-react';
+import DashboardTab from './components/DashboardTab';
+import OrdersTab from './components/OrdersTab';
+import ClientsTab from './components/ClientsTab';
+import ProductsTab from './components/ProductsTab';
 import OrderForm from './components/OrderForm';
 import DeleteConfirmModal from './components/DeleteConfirmModal';
 import { colors, getDaysLeft, getUrgency, fmtDate, getProductDetailsText } from './utils/orderHelpers';
@@ -18,6 +18,7 @@ export default function AlittlePartCRM() {
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [viewMode, setViewMode] = useState('table');
   const [copyStatusLabel, setCopyStatusLabel] = useState('Copy Status');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const restoreInputRef = useRef(null);
 
   const emptyForm = {
@@ -231,17 +232,51 @@ export default function AlittlePartCRM() {
   }
 
   return (
-    <div className="min-h-screen p-3 md:p-5" style={{ backgroundColor: colors.cream, fontFamily: 'system-ui, sans-serif' }}>
-      <div className="max-w-[1400px] mx-auto">
-        <div className="mb-5 text-center"><h1 className="text-3xl md:text-4xl font-light tracking-wide italic" style={{ color: colors.coralDark, fontFamily: 'Georgia, serif' }}>a little part</h1><p className="text-xs tracking-widest mt-1 uppercase" style={{ color: colors.textLight }}>Order Dashboard</p></div>
-        <DashboardCards stats={stats} />
-        <Toolbar search={search} setSearch={setSearch} filterStatus={filterStatus} setFilterStatus={setFilterStatus} exportCSV={exportCSV} handleBackup={handleBackup} handleRestore={handleRestore} copyStatus={() => copyStatus()} copyStatusLabel={copyStatusLabel} viewMode={viewMode} setViewMode={setViewMode} openNewForm={openNewForm} restoreInputRef={restoreInputRef} />
-        <h2 className="text-xl font-bold mb-2 flex items-center gap-2" style={{ color: colors.headerBg }}>Orders <span className="text-sm font-normal" style={{ color: colors.textLight }}>({filteredOrders.length})</span></h2>
-        {filteredOrders.length === 0 ? <div className="text-center py-16 rounded-lg bg-white"><Package className="w-12 h-12 mx-auto mb-3" style={{ color: colors.coralLight }} /><p style={{ color: colors.textLight }}>{orders.length === 0 ? "No orders yet. Click 'New Order' to get started!" : 'No orders match your filter.'}</p></div> : viewMode === 'grouped' ? <GroupedView groupedOrders={groupedOrders} openEditForm={openEditForm} setConfirmDelete={setConfirmDelete} quickStatusChange={quickStatusChange} getSourceLabel={getSourceLabel} /> : <OrderTable filteredOrders={filteredOrders} openEditForm={openEditForm} setConfirmDelete={setConfirmDelete} quickStatusChange={quickStatusChange} getSourceLabel={getSourceLabel} />}
-        <p className="text-xs italic mt-3 text-center" style={{ color: colors.textLight }}>🔴 Red rows = deadline within 3 days or overdue &nbsp;•&nbsp; 🟡 Yellow = within a week &nbsp;•&nbsp; 🟢 Green = delivered</p>
+    <div className="min-h-screen flex" style={{ backgroundColor: colors.cream, fontFamily: 'system-ui, sans-serif' }}>
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <main className="min-w-0 flex-1 overflow-y-auto pb-20 md:pb-0">
+        <div className="w-full p-4 md:p-6 lg:p-8">
+          <div className="mb-6 flex items-end justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-light tracking-wide italic" style={{ color: colors.coralDark, fontFamily: 'Georgia, serif' }}>a little part</h1>
+              <p className="text-xs tracking-widest mt-1 uppercase" style={{ color: colors.textLight }}>Order Dashboard</p>
+            </div>
+            <div className="hidden sm:block text-xs font-medium uppercase tracking-wide" style={{ color: colors.textLight }}>{activeTab}</div>
+          </div>
+          {activeTab === 'dashboard' && <DashboardTab stats={stats} orders={orders} setActiveTab={setActiveTab} />}
+          {activeTab === 'orders' && <OrdersTab filteredOrders={filteredOrders} orders={orders} search={search} setSearch={setSearch} filterStatus={filterStatus} setFilterStatus={setFilterStatus} exportCSV={exportCSV} handleBackup={handleBackup} handleRestore={handleRestore} copyStatus={copyStatus} copyStatusLabel={copyStatusLabel} viewMode={viewMode} setViewMode={setViewMode} openNewForm={openNewForm} restoreInputRef={restoreInputRef} groupedOrders={groupedOrders} openEditForm={openEditForm} setConfirmDelete={setConfirmDelete} quickStatusChange={quickStatusChange} getSourceLabel={getSourceLabel} />}
+          {activeTab === 'clients' && <ClientsTab orders={orders} setSearch={setSearch} setActiveTab={setActiveTab} />}
+          {activeTab === 'products' && <ProductsTab orders={orders} />}
+        </div>
         <OrderForm form={form} setForm={setForm} showForm={showForm} setShowForm={setShowForm} editingOrder={editingOrder} handleSave={handleSave} referralClients={referralClients} />
         <DeleteConfirmModal confirmDelete={confirmDelete} handleDelete={handleDelete} setConfirmDelete={setConfirmDelete} />
-      </div>
+      </main>
     </div>
+  );
+}
+
+function Sidebar({ activeTab, setActiveTab }) {
+  const navItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'orders', label: 'Orders', icon: Package },
+    { id: 'clients', label: 'Clients', icon: Users },
+    { id: 'products', label: 'Products', icon: Boxes }
+  ];
+
+  return (
+    <aside className="fixed bottom-0 left-0 right-0 z-40 border-t bg-white md:sticky md:top-0 md:h-screen md:w-60 md:shrink-0 md:border-t-0 md:border-r" style={{ borderColor: colors.creamDark }}>
+      <div className="hidden md:block px-5 py-6 border-b" style={{ borderColor: colors.creamDark }}>
+        <div className="text-2xl font-light italic tracking-wide" style={{ color: colors.coralDark, fontFamily: 'Georgia, serif' }}>a little part</div>
+        <div className="text-[10px] uppercase tracking-[0.2em] mt-1" style={{ color: colors.textLight }}>Order CRM</div>
+      </div>
+      <nav className="flex items-center justify-around gap-1 p-2 md:flex-col md:items-stretch md:justify-start md:gap-1 md:p-3">
+        {navItems.map(({ id, label, icon: Icon }) => (
+          <button key={id} onClick={() => setActiveTab(id)} className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium transition md:justify-start md:text-sm ${activeTab === id ? 'font-semibold' : ''}`} style={{ backgroundColor: activeTab === id ? colors.coralPale : 'transparent', color: activeTab === id ? colors.coralDark : colors.textLight }}>
+            <Icon className="w-5 h-5" aria-hidden="true" />
+            <span>{label}</span>
+          </button>
+        ))}
+      </nav>
+    </aside>
   );
 }
