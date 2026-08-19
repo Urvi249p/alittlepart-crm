@@ -1,3 +1,5 @@
+@import "tailwindcss";
+
 :root {
   --text: #6b6375;
   --text-h: #08060d;
@@ -54,12 +56,14 @@ body {
   margin: 0;
 }
 
+.table-scroll-shadow {
+  box-shadow: inset -14px 0 14px -14px rgba(44, 74, 107, 0.45);
+}
+
 #root {
-  width: 1126px;
-  max-width: 100%;
+  width: 100%;
   margin: 0 auto;
   text-align: center;
-  border-inline: 1px solid var(--border);
   min-height: 100svh;
   display: flex;
   flex-direction: column;
