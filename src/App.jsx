@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Boxes, LayoutDashboard, Package, Users } from 'lucide-react';
+import { Boxes, Camera, LayoutDashboard, Package, PanelLeftClose, PanelLeftOpen, Users } from 'lucide-react';
 import DashboardTab from './components/DashboardTab';
 import OrdersTab from './components/OrdersTab';
 import ClientsTab from './components/ClientsTab';
 import ProductsTab from './components/ProductsTab';
+import PostingTab from './components/PostingTab';
 import OrderForm from './components/OrderForm';
 import DeleteConfirmModal from './components/DeleteConfirmModal';
 import { colors, getDaysLeft, getUrgency, fmtDate, getProductDetailsText } from './utils/orderHelpers';
@@ -19,12 +20,13 @@ export default function AlittlePartCRM() {
   const [viewMode, setViewMode] = useState('table');
   const [copyStatusLabel, setCopyStatusLabel] = useState('Copy Status');
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const restoreInputRef = useRef(null);
 
   const emptyForm = {
     id: '', deadline: '', customerName: '', contact: '', source: '', sourceDetail: '', productType: 'Magazine',
     numberOfPages: '', quality: '', size: '', quantity: '', sellingPrice: '', cost: '', share: '', advancePaid: '',
-    deliveryPlace: '', deliveryDate: '', occasion: '', packaging: 'Regular', status: 'Pending',
+    deliveryPlace: '', deliveryDate: '', occasion: '', packaging: 'Regular', status: 'Pending', storyStatus: 'Pending', reelStatus: 'Pending',
     orderDate: new Date().toISOString().split('T')[0], requirements: '', notes: ''
   };
 
@@ -164,6 +166,10 @@ export default function AlittlePartCRM() {
     await saveOrders(orders.map(o => o.id === id ? { ...o, status } : o));
   };
 
+  const setPostingField = async (id, field, value) => {
+    await saveOrders(orders.map(o => o.id === id ? { ...o, [field]: value } : o));
+  };
+
   const exportCSV = () => {
     const headers = ['Deadline', 'Client Name', 'Contact', 'Source', 'Source Detail', 'Product Type', 'Pages', 'Selling Price', 'Cost', 'Share (Profit)', 'Advance', 'Balance', 'Delivery Place', 'Delivery Date', 'Occasion', 'Packaging', 'Status', 'Requirements', 'Notes', 'Order Date'];
     const rows = filteredOrders.map(o => {
@@ -233,7 +239,7 @@ export default function AlittlePartCRM() {
 
   return (
     <div className="min-h-screen flex" style={{ backgroundColor: colors.cream, fontFamily: 'system-ui, sans-serif' }}>
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
       <main className="min-w-0 flex-1 overflow-y-auto pb-20 md:pb-0">
         <div className="w-full p-4 md:p-6 lg:p-8">
           <div className="mb-6 flex items-end justify-between gap-4">
@@ -245,6 +251,7 @@ export default function AlittlePartCRM() {
           </div>
           {activeTab === 'dashboard' && <DashboardTab stats={stats} orders={orders} setActiveTab={setActiveTab} />}
           {activeTab === 'orders' && <OrdersTab filteredOrders={filteredOrders} orders={orders} search={search} setSearch={setSearch} filterStatus={filterStatus} setFilterStatus={setFilterStatus} exportCSV={exportCSV} handleBackup={handleBackup} handleRestore={handleRestore} copyStatus={copyStatus} copyStatusLabel={copyStatusLabel} viewMode={viewMode} setViewMode={setViewMode} openNewForm={openNewForm} restoreInputRef={restoreInputRef} groupedOrders={groupedOrders} openEditForm={openEditForm} setConfirmDelete={setConfirmDelete} quickStatusChange={quickStatusChange} getSourceLabel={getSourceLabel} />}
+          {activeTab === 'posting' && <PostingTab orders={orders} setPostingField={setPostingField} />}
           {activeTab === 'clients' && <ClientsTab orders={orders} setSearch={setSearch} setActiveTab={setActiveTab} />}
           {activeTab === 'products' && <ProductsTab orders={orders} />}
         </div>
@@ -255,28 +262,42 @@ export default function AlittlePartCRM() {
   );
 }
 
-function Sidebar({ activeTab, setActiveTab }) {
+function Sidebar({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen }) {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'orders', label: 'Orders', icon: Package },
+    { id: 'posting', label: 'Posting', icon: Camera },
     { id: 'clients', label: 'Clients', icon: Users },
     { id: 'products', label: 'Products', icon: Boxes }
   ];
 
   return (
-    <aside className="fixed bottom-0 left-0 right-0 z-40 border-t bg-white md:sticky md:top-0 md:h-screen md:w-60 md:shrink-0 md:border-t-0 md:border-r" style={{ borderColor: colors.creamDark }}>
-      <div className="hidden md:block px-5 py-6 border-b" style={{ borderColor: colors.creamDark }}>
-        <div className="text-2xl font-light italic tracking-wide" style={{ color: colors.coralDark, fontFamily: 'Georgia, serif' }}>a little part</div>
-        <div className="text-[10px] uppercase tracking-[0.2em] mt-1" style={{ color: colors.textLight }}>Order CRM</div>
-      </div>
-      <nav className="flex items-center justify-around gap-1 p-2 md:flex-col md:items-stretch md:justify-start md:gap-1 md:p-3">
-        {navItems.map(({ id, label, icon: Icon }) => (
-          <button key={id} onClick={() => setActiveTab(id)} className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium transition md:justify-start md:text-sm ${activeTab === id ? 'font-semibold' : ''}`} style={{ backgroundColor: activeTab === id ? colors.coralPale : 'transparent', color: activeTab === id ? colors.coralDark : colors.textLight }}>
-            <Icon className="w-5 h-5" aria-hidden="true" />
-            <span>{label}</span>
+    <>
+      <aside className={`fixed bottom-0 left-0 right-0 z-40 overflow-hidden border-t bg-white transition-[width] duration-200 md:sticky md:top-0 md:h-screen md:shrink-0 md:border-t-0 md:border-r ${sidebarOpen ? 'md:w-60' : 'hidden md:block md:w-0 md:border-r-0'}`} style={{ borderColor: colors.creamDark }}>
+        <div className="hidden md:flex items-start justify-between px-5 py-6 border-b" style={{ borderColor: colors.creamDark }}>
+          <div>
+            <div className="text-2xl font-light italic tracking-wide" style={{ color: colors.coralDark, fontFamily: 'Georgia, serif' }}>a little part</div>
+            <div className="text-[10px] uppercase tracking-[0.2em] mt-1" style={{ color: colors.textLight }}>Order CRM</div>
+          </div>
+          <button onClick={() => setSidebarOpen(false)} className="rounded-lg p-1.5 transition hover:bg-[#FCE8E3]" style={{ color: colors.coralDark }} title="Collapse menu" aria-label="Collapse menu">
+            <PanelLeftClose className="h-4 w-4" aria-hidden="true" />
           </button>
-        ))}
-      </nav>
-    </aside>
+        </div>
+        <button onClick={() => setSidebarOpen(false)} className="absolute right-2 top-1 rounded p-1 md:hidden" style={{ color: colors.coralDark }} title="Hide menu" aria-label="Hide menu">
+          <PanelLeftClose className="h-4 w-4" aria-hidden="true" />
+        </button>
+        <nav className="flex items-center justify-around gap-1 p-2 md:flex-col md:items-stretch md:justify-start md:gap-1 md:p-3">
+          {navItems.map(({ id, label, icon: Icon }) => (
+            <button key={id} onClick={() => setActiveTab(id)} className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-xs font-medium transition md:justify-start md:text-sm ${activeTab === id ? 'font-semibold' : ''}`} style={{ backgroundColor: activeTab === id ? colors.coralPale : 'transparent', color: activeTab === id ? colors.coralDark : colors.textLight }}>
+              <Icon className="w-5 h-5" aria-hidden="true" />
+              <span>{label}</span>
+            </button>
+          ))}
+        </nav>
+      </aside>
+      {!sidebarOpen && <button onClick={() => setSidebarOpen(true)} className="fixed left-3 top-3 z-50 rounded-lg bg-white p-2 shadow-sm transition hover:bg-[#FCE8E3]" style={{ color: colors.coralDark }} title="Open menu" aria-label="Open menu">
+        <PanelLeftOpen className="h-5 w-5" aria-hidden="true" />
+      </button>}
+    </>
   );
 }

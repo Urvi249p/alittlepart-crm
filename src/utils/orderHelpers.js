@@ -27,6 +27,17 @@ export const getUrgency = (order) => {
   return 'normal';
 };
 
+export const getPostingSummary = (order) => {
+  const story = order.storyStatus || 'Pending';
+  const reel = order.reelStatus || 'Pending';
+  const storyOpen = story === 'Pending';
+  const reelOpen = reel === 'Pending';
+  if (storyOpen && reelOpen) return { label: 'Both pending', tone: 'pending' };
+  if (storyOpen) return { label: 'Story pending', tone: 'pending' };
+  if (reelOpen) return { label: 'Reel pending', tone: 'pending' };
+  return { label: 'Done', tone: 'done' };
+};
+
 export const getRowStyle = (urgency) => {
   switch (urgency) {
     case 'overdue': return { backgroundColor: '#FEE2E2', borderLeft: '4px solid #DC2626' };
