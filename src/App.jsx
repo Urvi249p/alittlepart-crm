@@ -9,6 +9,8 @@ import OrderForm from './components/OrderForm';
 import DeleteConfirmModal from './components/DeleteConfirmModal';
 import QuickCommand from './components/QuickCommand';
 import { colors, getDaysLeft, getUrgency, fmtDate } from './utils/orderHelpers';
+import { collection, deleteDoc, doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { db } from './utils/firebaseClient';
 
 export default function AlittlePartCRM() {
   const [orders, setOrders] = useState([]);
@@ -33,21 +35,29 @@ export default function AlittlePartCRM() {
 
   const [form, setForm] = useState(emptyForm);
 
-  // Use localStorage instead of a backend; data is scoped to this browser only.
   useEffect(() => {
-    (async () => {
-      try {
-        const result = localStorage.getItem('alittlepart-orders');
-        if (result) setOrders(JSON.parse(result));
-      } catch { return; }
-      finally { setLoading(false); }
-    })();
+    const unsubscribe = onSnapshot(
+      collection(db, 'orders'),
+      snapshot => {
+        const loadedOrders = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+        setOrders(loadedOrders);
+        setLoading(false);
+      },
+      error => {
+        console.error('Failed to listen to orders from Firestore:', error);
+        setLoading(false);
+      }
+    );
+
+    return unsubscribe;
   }, []);
 
-  const saveOrders = async (newOrders) => {
-    setOrders(newOrders);
-    try { localStorage.setItem('alittlepart-orders', JSON.stringify(newOrders)); }
-    catch (e) { console.error('Save failed', e); }
+  const saveOrderToFirestore = async (order) => {
+    await setDoc(doc(db, 'orders', order.id), order);
+  };
+
+  const deleteOrderFromFirestore = async (id) => {
+    await deleteDoc(doc(db, 'orders', id));
   };
 
   const stats = useMemo(() => {
@@ -153,22 +163,32 @@ export default function AlittlePartCRM() {
       return;
     }
     const newOrders = editingOrder ? orders.map(o => o.id === form.id ? form : o) : [...orders, form];
-    await saveOrders(newOrders);
+    await saveOrderToFirestore(form);
+    setOrders(newOrders);
     setShowForm(false);
     setEditingOrder(null);
   };
 
   const handleDelete = async (id) => {
-    await saveOrders(orders.filter(o => o.id !== id));
+    await deleteOrderFromFirestore(id);
+    setOrders(orders.filter(o => o.id !== id));
     setConfirmDelete(null);
   };
 
   const quickStatusChange = async (id, status) => {
-    await saveOrders(orders.map(o => o.id === id ? { ...o, status } : o));
+    const updatedOrder = orders.find(order => order.id === id);
+    if (!updatedOrder) return;
+    const orderWithUpdatedStatus = { ...updatedOrder, status };
+    await saveOrderToFirestore(orderWithUpdatedStatus);
+    setOrders(orders.map(order => order.id === id ? orderWithUpdatedStatus : order));
   };
 
   const setPostingField = async (id, field, value) => {
-    await saveOrders(orders.map(o => o.id === id ? { ...o, [field]: value } : o));
+    const updatedOrder = orders.find(order => order.id === id);
+    if (!updatedOrder) return;
+    const orderWithUpdatedField = { ...updatedOrder, [field]: value };
+    await saveOrderToFirestore(orderWithUpdatedField);
+    setOrders(orders.map(order => order.id === id ? orderWithUpdatedField : order));
   };
 
   const exportCSV = () => {
@@ -199,7 +219,10 @@ export default function AlittlePartCRM() {
       try {
         const restoredOrders = JSON.parse(loadEvent.target.result);
         if (!Array.isArray(restoredOrders)) { alert('Restore failed: the JSON file must contain an array of orders.'); return; }
-        if (window.confirm('This will overwrite all current orders. Continue?')) await saveOrders(restoredOrders);
+        if (window.confirm('This will overwrite all current orders. Continue?')) {
+          await Promise.all(restoredOrders.map(saveOrderToFirestore));
+          setOrders(restoredOrders);
+        }
       } catch { alert('Restore failed: the selected file is not valid JSON.'); }
     };
     reader.onerror = () => alert('Restore failed: the file could not be read.');
