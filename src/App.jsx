@@ -10,12 +10,16 @@ import DeleteConfirmModal from './components/DeleteConfirmModal';
 import QuickCommand from './components/QuickCommand';
 import { colors, getDaysLeft, getUrgency, fmtDate } from './utils/orderHelpers';
 import { collection, deleteDoc, doc, onSnapshot, setDoc } from 'firebase/firestore';
-import { db } from './utils/firebaseClient';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth, db, loginWithEmail, logout } from './utils/firebaseClient';
 
 export default function AlittlePartCRM() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -34,6 +38,15 @@ export default function AlittlePartCRM() {
   };
 
   const [form, setForm] = useState(emptyForm);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, currentUser => {
+      setUser(currentUser);
+      setAuthLoading(false);
+    });
+
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onSnapshot(
@@ -260,18 +273,78 @@ export default function AlittlePartCRM() {
               <h1 className="text-3xl font-light tracking-wide italic" style={{ color: colors.coralDark, fontFamily: 'Georgia, serif' }}>a little part</h1>
               <p className="text-xs tracking-widest mt-1 uppercase" style={{ color: colors.textLight }}>Order Dashboard</p>
             </div>
-            <div className="hidden sm:block text-xs font-medium uppercase tracking-wide" style={{ color: colors.textLight }}>{activeTab}</div>
+            <div className="flex items-center gap-3 text-xs" style={{ color: colors.textLight }}>
+              <span className="hidden sm:block font-medium uppercase tracking-wide">{activeTab}</span>
+              {!authLoading && (user ? (
+                <div className="flex items-center gap-2">
+                  <span className="max-w-48 truncate">{user.email}</span>
+                  <button type="button" onClick={logout} className="font-medium transition hover:underline" style={{ color: colors.coralDark }}>Logout</button>
+                </div>
+              ) : (
+                <button type="button" onClick={() => setShowLogin(true)} className="font-medium transition hover:underline" style={{ color: colors.coralDark }}>Login</button>
+              ))}
+            </div>
           </div>
-          <QuickCommand orders={orders} setSearch={setSearch} setFilterStatus={setFilterStatus} setActiveTab={setActiveTab} quickStatusChange={quickStatusChange} />
+          <QuickCommand canEdit={Boolean(user)} orders={orders} setSearch={setSearch} setFilterStatus={setFilterStatus} setActiveTab={setActiveTab} quickStatusChange={quickStatusChange} />
           {activeTab === 'dashboard' && <DashboardTab stats={stats} orders={orders} setActiveTab={setActiveTab} />}
-          {activeTab === 'orders' && <OrdersTab filteredOrders={filteredOrders} orders={orders} search={search} setSearch={setSearch} filterStatus={filterStatus} setFilterStatus={setFilterStatus} exportCSV={exportCSV} handleBackup={handleBackup} handleRestore={handleRestore} copyStatus={copyStatus} copyStatusLabel={copyStatusLabel} viewMode={viewMode} setViewMode={setViewMode} openNewForm={openNewForm} restoreInputRef={restoreInputRef} groupedOrders={groupedOrders} openEditForm={openEditForm} setConfirmDelete={setConfirmDelete} quickStatusChange={quickStatusChange} getSourceLabel={getSourceLabel} />}
-          {activeTab === 'posting' && <PostingTab orders={orders} setPostingField={setPostingField} />}
-          {activeTab === 'clients' && <ClientsTab orders={orders} setSearch={setSearch} setActiveTab={setActiveTab} />}
+          {activeTab === 'orders' && <OrdersTab canEdit={Boolean(user)} filteredOrders={filteredOrders} orders={orders} search={search} setSearch={setSearch} filterStatus={filterStatus} setFilterStatus={setFilterStatus} exportCSV={exportCSV} handleBackup={handleBackup} handleRestore={handleRestore} copyStatus={copyStatus} copyStatusLabel={copyStatusLabel} viewMode={viewMode} setViewMode={setViewMode} openNewForm={openNewForm} restoreInputRef={restoreInputRef} groupedOrders={groupedOrders} openEditForm={openEditForm} setConfirmDelete={setConfirmDelete} quickStatusChange={quickStatusChange} getSourceLabel={getSourceLabel} />}
+          {activeTab === 'posting' && <PostingTab canEdit={Boolean(user)} orders={orders} setPostingField={setPostingField} />}
+          {activeTab === 'clients' && <ClientsTab canEdit={Boolean(user)} orders={orders} setSearch={setSearch} setActiveTab={setActiveTab} />}
           {activeTab === 'products' && <ProductsTab orders={orders} />}
         </div>
-        <OrderForm form={form} setForm={setForm} showForm={showForm} setShowForm={setShowForm} editingOrder={editingOrder} handleSave={handleSave} referralClients={referralClients} />
-        <DeleteConfirmModal confirmDelete={confirmDelete} handleDelete={handleDelete} setConfirmDelete={setConfirmDelete} />
+        <OrderForm canEdit={Boolean(user)} form={form} setForm={setForm} showForm={showForm} setShowForm={setShowForm} editingOrder={editingOrder} handleSave={handleSave} referralClients={referralClients} />
+        <DeleteConfirmModal canEdit={Boolean(user)} confirmDelete={confirmDelete} handleDelete={handleDelete} setConfirmDelete={setConfirmDelete} />
+        {showLogin && <LoginModal onClose={() => setShowLogin(false)} />}
       </main>
+    </div>
+  );
+}
+
+function LoginModal({ onClose }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async event => {
+    event.preventDefault();
+    setError('');
+    setSubmitting(true);
+    try {
+      await loginWithEmail(email, password);
+      onClose();
+    } catch (loginError) {
+      setError(loginError.message || 'Login failed. Please check your details.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+      <form onSubmit={handleSubmit} onClick={event => event.stopPropagation()} className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl" style={{ border: `1px solid ${colors.creamDark}` }}>
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold" style={{ color: colors.coralDark }}>Login</h2>
+            <p className="mt-1 text-xs" style={{ color: colors.textLight }}>Sign in to manage your orders.</p>
+          </div>
+          <button type="button" onClick={onClose} className="text-xl leading-none" style={{ color: colors.textLight }} aria-label="Close login">&times;</button>
+        </div>
+        <div className="space-y-3">
+          <label className="block text-xs font-medium" style={{ color: colors.text }}>
+            Email
+            <input type="email" value={email} onChange={event => setEmail(event.target.value)} required className="mt-1 h-10 w-full rounded-lg border px-3 text-sm outline-none" style={{ borderColor: colors.creamDark }} />
+          </label>
+          <label className="block text-xs font-medium" style={{ color: colors.text }}>
+            Password
+            <input type="password" value={password} onChange={event => setPassword(event.target.value)} required className="mt-1 h-10 w-full rounded-lg border px-3 text-sm outline-none" style={{ borderColor: colors.creamDark }} />
+          </label>
+        </div>
+        {error && <p className="mt-3 text-xs" style={{ color: colors.coralDark }}>{error}</p>}
+        <button type="submit" disabled={submitting} className="mt-5 h-10 w-full rounded-lg text-sm font-medium text-white transition disabled:opacity-60" style={{ backgroundColor: colors.coral }}>
+          {submitting ? 'Signing in...' : 'Sign in'}
+        </button>
+      </form>
     </div>
   );
 }

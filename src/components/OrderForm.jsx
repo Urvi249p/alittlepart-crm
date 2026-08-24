@@ -3,7 +3,7 @@ import { Sparkles, X } from 'lucide-react';
 import { colors } from '../utils/orderHelpers';
 import { callGeminiJSON } from '../utils/geminiClient';
 
-export default function OrderForm({ form, setForm, showForm, setShowForm, editingOrder, handleSave, referralClients }) {
+export default function OrderForm({ canEdit, form, setForm, showForm, setShowForm, editingOrder, handleSave, referralClients }) {
   const [rawMessage, setRawMessage] = useState('');
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState('');
@@ -69,7 +69,7 @@ ${rawMessage}`;
     }
   };
 
-  if (!showForm) return null;
+  if (!showForm || !canEdit) return null;
 
   return (
     <>

@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { colors, fmtDate, fmtMoney, getPostingSummary, getProductDetailsText } from '../utils/orderHelpers';
 import { callGemini } from '../utils/geminiClient';
 
-export default function PostingTab({ orders, setPostingField }) {
+export default function PostingTab({ canEdit, orders, setPostingField }) {
   const [showAll, setShowAll] = useState(false);
   const [copyStatusLabel, setCopyStatusLabel] = useState('Copy Update');
   const [draftingId, setDraftingId] = useState(null);
@@ -97,20 +97,20 @@ Return only the caption text, with no quotation marks or explanation.`;
         </div>
       </div>
 
-      {completedOrders.length === 0 ? <div className="bg-white rounded-xl shadow-sm overflow-hidden"><EmptyState message="No completed orders yet" /></div> : visibleOrders.length === 0 ? <div className="bg-white rounded-xl shadow-sm overflow-hidden"><EmptyState message="Nothing pending — nice work!" /></div> : <PostingCards orders={visibleOrders} setPostingField={setPostingField} draftingId={draftingId} captions={captions} draftCaption={draftCaption} copyCaption={copyCaption} />}
+      {completedOrders.length === 0 ? <div className="bg-white rounded-xl shadow-sm overflow-hidden"><EmptyState message="No completed orders yet" /></div> : visibleOrders.length === 0 ? <div className="bg-white rounded-xl shadow-sm overflow-hidden"><EmptyState message="Nothing pending — nice work!" /></div> : <PostingCards canEdit={canEdit} orders={visibleOrders} setPostingField={setPostingField} draftingId={draftingId} captions={captions} draftCaption={draftCaption} copyCaption={copyCaption} />}
     </section>
   );
 }
 
-function PostingCards({ orders, setPostingField, draftingId, captions, draftCaption, copyCaption }) {
+function PostingCards({ canEdit, orders, setPostingField, draftingId, captions, draftCaption, copyCaption }) {
   return (
     <div className="space-y-3">
-      {orders.map(order => <PostingCard key={order.id} order={order} setPostingField={setPostingField} draftingId={draftingId} caption={captions[order.id]} draftCaption={draftCaption} copyCaption={copyCaption} />)}
+      {orders.map(order => <PostingCard canEdit={canEdit} key={order.id} order={order} setPostingField={setPostingField} draftingId={draftingId} caption={captions[order.id]} draftCaption={draftCaption} copyCaption={copyCaption} />)}
     </div>
   );
 }
 
-function PostingCard({ order, setPostingField, draftingId, caption, draftCaption, copyCaption }) {
+function PostingCard({ canEdit, order, setPostingField, draftingId, caption, draftCaption, copyCaption }) {
   const details = getProductDetailsText(order);
   const summary = getPostingSummary(order);
   const secondaryDetails = [order.contact, details, order.occasion].filter(Boolean).join(' · ');
@@ -129,11 +129,11 @@ function PostingCard({ order, setPostingField, draftingId, caption, draftCaption
         <span>Selling price: {order.sellingPrice ? fmtMoney(order.sellingPrice) : '-'}</span>
       </div>
       <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <PostingSelect label="Story" value={order.storyStatus} onChange={value => setPostingField(order.id, 'storyStatus', value)} />
-        <PostingSelect label="Reel" value={order.reelStatus} onChange={value => setPostingField(order.id, 'reelStatus', value)} />
+        <PostingSelect canEdit={canEdit} label="Story" value={order.storyStatus} onChange={value => setPostingField(order.id, 'storyStatus', value)} />
+        <PostingSelect canEdit={canEdit} label="Reel" value={order.reelStatus} onChange={value => setPostingField(order.id, 'reelStatus', value)} />
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <button onClick={() => draftCaption(order)} disabled={draftingId === order.id} className="inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-70" style={{ borderColor: colors.coralLight, color: colors.coralDark, backgroundColor: 'white' }}>
+        <button onClick={() => draftCaption(order)} disabled={!canEdit || draftingId === order.id} className="inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-70" style={{ borderColor: colors.coralLight, color: colors.coralDark, backgroundColor: 'white' }}>
           {draftingId === order.id ? <><span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />Drafting...</> : <><Sparkles className="h-3.5 w-3.5" aria-hidden="true" />Draft Caption</>}
         </button>
       </div>
@@ -143,7 +143,7 @@ function PostingCard({ order, setPostingField, draftingId, caption, draftCaption
           <p className="min-w-0 flex-1 text-sm" style={{ color: colors.text }}>&ldquo;{caption.text}&rdquo;</p>
           <button onClick={() => copyCaption(caption.text)} className="inline-flex shrink-0 items-center gap-1 rounded-lg border px-2 py-1 text-xs font-medium transition hover:bg-white" style={{ borderColor: colors.coralLight, color: colors.coralDark, backgroundColor: 'white' }}><Copy className="h-3.5 w-3.5" aria-hidden="true" />Copy</button>
         </div>
-        <button onClick={() => draftCaption(order)} disabled={draftingId === order.id} className="mt-2 text-xs font-medium underline disabled:cursor-not-allowed disabled:opacity-70" style={{ color: colors.coralDark }}>Regenerate</button>
+        <button onClick={() => draftCaption(order)} disabled={!canEdit || draftingId === order.id} className="mt-2 text-xs font-medium underline disabled:cursor-not-allowed disabled:opacity-70" style={{ color: colors.coralDark }}>Regenerate</button>
       </div>}
     </article>
   );
@@ -154,8 +154,8 @@ function PostingSummary({ summary }) {
   return <span className="inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-medium" style={{ backgroundColor: isDone ? '#DCFCE7' : colors.coralPale, color: isDone ? '#166534' : colors.coralDark }}>{summary.label}</span>;
 }
 
-function PostingSelect({ label, value, onChange }) {
-  return <label className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs font-medium" style={{ borderColor: colors.coralLight, color: colors.text }}><span>{label}</span><select value={value || 'Pending'} onChange={event => onChange(event.target.value)} className="min-w-0 rounded border bg-white px-2 py-1.5 text-xs" style={{ borderColor: colors.coralLight, color: colors.text }}><option>Pending</option><option>Posted</option><option>Not Allowed</option></select></label>;
+function PostingSelect({ canEdit, label, value, onChange }) {
+  return <label className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs font-medium" style={{ borderColor: colors.coralLight, color: colors.text }}><span>{label}</span><select value={value || 'Pending'} onChange={event => onChange(event.target.value)} disabled={!canEdit} className="min-w-0 rounded border bg-white px-2 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50" style={{ borderColor: colors.coralLight, color: colors.text }}><option>Pending</option><option>Posted</option><option>Not Allowed</option></select></label>;
 }
 
 function EmptyState({ message }) {

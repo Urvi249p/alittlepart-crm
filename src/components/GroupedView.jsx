@@ -1,7 +1,7 @@
 import { AlertCircle, CheckCircle2, Clock, Edit2, Trash2 } from 'lucide-react';
 import { colors, fmtDate, fmtMoney, getDaysLeft, getUrgency, getRowStyle, getProductDetailsText } from '../utils/orderHelpers';
 
-export default function GroupedView({ groupedOrders, openEditForm, setConfirmDelete, quickStatusChange, getSourceLabel }) {
+export default function GroupedView({ canEdit, groupedOrders, openEditForm, setConfirmDelete, quickStatusChange, getSourceLabel }) {
   return (
     <div className="space-y-4">
       {groupedOrders.map(group => {
@@ -33,12 +33,12 @@ export default function GroupedView({ groupedOrders, openEditForm, setConfirmDel
                   <span className="px-2 py-0.5 rounded-lg text-xs" style={{ backgroundColor: colors.coralPale, color: colors.coralDark }}>{order.productType}</span>
                   {getProductDetailsText(order) && <span className="text-xs" style={{ color: colors.textLight }}>{getProductDetailsText(order)}</span>}
                   <span className="font-medium ml-auto" style={{ color: colors.text }}>₹{fmtMoney(order.sellingPrice)}</span>
-                  <select value={order.status} onChange={e => quickStatusChange(order.id, e.target.value)} className="text-xs px-2 py-1 rounded border bg-white cursor-pointer" style={{ borderColor: colors.coralLight, color: colors.text }}>
+                  <select value={order.status} onChange={e => quickStatusChange(order.id, e.target.value)} disabled={!canEdit} className="text-xs px-2 py-1 rounded border bg-white cursor-pointer disabled:cursor-not-allowed disabled:opacity-50" style={{ borderColor: colors.coralLight, color: colors.text }}>
                     <option>Pending</option><option>In Progress</option><option>Ready</option><option>Couriered</option><option>Delivered</option><option>Completed</option>
                   </select>
                   <div className="flex gap-1">
-                    <button onClick={() => openEditForm(order)} className="p-1.5 rounded hover:bg-white" style={{ color: colors.coralDark }} title="Edit"><Edit2 className="w-3.5 h-3.5" /></button>
-                    <button onClick={() => setConfirmDelete(order.id)} className="p-1.5 rounded hover:bg-white text-red-500" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+                    {canEdit && <button onClick={() => openEditForm(order)} className="p-1.5 rounded hover:bg-white" style={{ color: colors.coralDark }} title="Edit"><Edit2 className="w-3.5 h-3.5" /></button>}
+                    {canEdit && <button onClick={() => setConfirmDelete(order.id)} className="p-1.5 rounded hover:bg-white text-red-500" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>}
                   </div>
                 </div>
               ))}

@@ -2,6 +2,7 @@ import { Plus, Search, Download, Upload, Copy } from 'lucide-react';
 import { colors } from '../utils/orderHelpers';
 
 export default function Toolbar({
+  canEdit,
   search, setSearch, filterStatus, setFilterStatus, exportCSV, handleBackup,
   handleRestore, copyStatus, copyStatusLabel, viewMode, setViewMode, openNewForm, restoreInputRef
 }) {
@@ -46,7 +47,7 @@ export default function Toolbar({
           <button onClick={copyStatus} title="Copy Status" className="h-10 flex items-center justify-center gap-1.5 px-3 rounded-lg text-xs border font-medium whitespace-nowrap transition hover:bg-white" style={{ borderColor: colors.coralLight, color: colors.coralDark, backgroundColor: 'white' }}>
             <Copy className="w-3.5 h-3.5" /> {copyStatusLabel}
           </button>
-          <button onClick={() => restoreInputRef.current?.click()} title="Restore" className="h-10 flex items-center justify-center gap-1.5 px-3 rounded-lg text-xs border font-medium whitespace-nowrap transition hover:bg-white" style={{ borderColor: colors.coralLight, color: colors.coralDark, backgroundColor: 'white' }}>
+          <button onClick={() => restoreInputRef.current?.click()} disabled={!canEdit} title="Restore" className={`h-10 flex items-center justify-center gap-1.5 px-3 rounded-lg text-xs border font-medium whitespace-nowrap transition hover:bg-white ${!canEdit ? 'cursor-not-allowed opacity-50' : ''}`} style={{ borderColor: colors.coralLight, color: colors.coralDark, backgroundColor: 'white' }}>
             <Upload className="w-3.5 h-3.5" /> Restore
           </button>
           <input ref={restoreInputRef} type="file" accept=".json" onChange={handleRestore} className="hidden" />
@@ -55,7 +56,7 @@ export default function Toolbar({
           <button onClick={() => setViewMode('table')} className="h-full px-3 text-xs font-medium transition" style={{ backgroundColor: viewMode === 'table' ? colors.coralPale : 'white', color: colors.coralDark }}>Table View</button>
           <button onClick={() => setViewMode('grouped')} className="h-full px-3 text-xs font-medium transition" style={{ backgroundColor: viewMode === 'grouped' ? colors.coralPale : 'white', color: colors.coralDark }}>Grouped View</button>
         </div>
-        <button onClick={openNewForm} className="h-10 flex w-full md:w-auto items-center justify-center gap-2 px-4 rounded-lg text-white text-sm font-medium whitespace-nowrap transition hover:shadow-md" style={{ backgroundColor: colors.coral }}>
+        <button onClick={openNewForm} disabled={!canEdit} className={`h-10 flex w-full md:w-auto items-center justify-center gap-2 px-4 rounded-lg text-white text-sm font-medium whitespace-nowrap transition hover:shadow-md ${!canEdit ? 'cursor-not-allowed opacity-50' : ''}`} style={{ backgroundColor: colors.coral }}>
           <Plus className="w-4 h-4" /> New Order
         </button>
       </div>

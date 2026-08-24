@@ -1,7 +1,7 @@
 import { CheckCircle2, Edit2, Trash2 } from 'lucide-react';
 import { colors, fmtDate, fmtMoney, getDaysLeft, getUrgency, getRowStyle, getProductDetailsText } from '../utils/orderHelpers';
 
-export default function OrderTable({ filteredOrders, openEditForm, setConfirmDelete, quickStatusChange, getSourceLabel }) {
+export default function OrderTable({ canEdit, filteredOrders, openEditForm, setConfirmDelete, quickStatusChange, getSourceLabel }) {
   return (
     <div className="bg-white rounded-xl shadow-sm overflow-hidden">
       <div className="table-scroll-shadow overflow-x-auto">
@@ -41,15 +41,15 @@ export default function OrderTable({ filteredOrders, openEditForm, setConfirmDel
                   <Td><span className="px-2 py-0.5 rounded text-xs" style={{ backgroundColor: colors.coralPale, color: colors.coralDark }}>{getSourceLabel(order)}</span></Td>
                   <Td>{order.packaging === 'Premium' ? <span className="px-2 py-0.5 rounded text-xs font-medium" style={{ backgroundColor: '#FEF3C7', color: '#92400E' }}>✨ Premium</span> : <span className="text-xs text-gray-600">Regular</span>}</Td>
                   <Td className="border-l border-[#F5E4D7]">
-                    <select value={order.status} onChange={e => quickStatusChange(order.id, e.target.value)} className="text-xs px-2 py-1 rounded border bg-white cursor-pointer" style={{ borderColor: colors.coralLight, color: colors.text }}>
+                    <select value={order.status} onChange={e => quickStatusChange(order.id, e.target.value)} disabled={!canEdit} className="text-xs px-2 py-1 rounded border bg-white cursor-pointer disabled:cursor-not-allowed disabled:opacity-50" style={{ borderColor: colors.coralLight, color: colors.text }}>
                       <option>Pending</option><option>In Progress</option><option>Ready</option><option>Couriered</option><option>Delivered</option><option>Completed</option>
                     </select>
                   </Td>
                   <Td><div className="max-w-[150px] truncate text-xs" title={order.notes || ''} style={{ color: colors.textLight }}>{order.notes && <div>{order.notes}</div>}{!order.notes && '-'}</div></Td>
                   <Td>
                     <div className="flex gap-1">
-                      <button onClick={() => openEditForm(order)} className="p-1.5 rounded hover:bg-white" style={{ color: colors.coralDark }} title="Edit"><Edit2 className="w-3.5 h-3.5" /></button>
-                      <button onClick={() => setConfirmDelete(order.id)} className="p-1.5 rounded hover:bg-white text-red-500" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
+                      {canEdit && <button onClick={() => openEditForm(order)} className="p-1.5 rounded hover:bg-white" style={{ color: colors.coralDark }} title="Edit"><Edit2 className="w-3.5 h-3.5" /></button>}
+                      {canEdit && <button onClick={() => setConfirmDelete(order.id)} className="p-1.5 rounded hover:bg-white text-red-500" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>}
                     </div>
                   </Td>
                 </tr>
