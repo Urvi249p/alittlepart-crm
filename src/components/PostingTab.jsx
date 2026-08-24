@@ -1,10 +1,13 @@
-import { Camera, Copy } from 'lucide-react';
+import { Camera, Copy, Sparkles } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { colors, fmtDate, fmtMoney, getPostingSummary, getProductDetailsText } from '../utils/orderHelpers';
+import { callGemini } from '../utils/geminiClient';
 
 export default function PostingTab({ orders, setPostingField }) {
   const [showAll, setShowAll] = useState(false);
   const [copyStatusLabel, setCopyStatusLabel] = useState('Copy Update');
+  const [draftingId, setDraftingId] = useState(null);
+  const [captions, setCaptions] = useState({});
   const completedOrders = useMemo(() => orders.filter(order => order.status === 'Completed'), [orders]);
   const pendingCount = completedOrders.filter(order => getPostingSummary(order).tone === 'pending').length;
   const visibleOrders = useMemo(() => {
@@ -41,6 +44,41 @@ export default function PostingTab({ orders, setPostingField }) {
     } catch { window.prompt('Copy this posting update:', summary); }
   };
 
+  const draftCaption = async (order) => {
+    setDraftingId(order.id);
+    setCaptions(previous => ({ ...previous, [order.id]: { text: '', error: null } }));
+    const firstName = String(order.customerName || '').trim().split(/\s+/)[0];
+    const prompt = `Write ONE short, warm Instagram caption for a completed product showcased in either a Story or Reel. Keep it to 2-3 sentences maximum, with no hashtags unless natural and no more than 1-2 emojis. The business is a small personalized gifting and printing business called "a little part". Use a warm, personal, understated tone that is not salesy.
+
+Do not mention price, phone numbers, or an exact delivery address. Use only the details provided below:
+Customer first name: ${firstName || 'Not provided'}
+Product type: ${order.productType || 'Not provided'}
+Product details: ${getProductDetailsText(order) || 'Not provided'}
+Occasion: ${order.occasion || 'Not provided'}
+Delivery place: ${order.deliveryPlace || 'Not provided'}
+
+Return only the caption text, with no quotation marks or explanation.`;
+
+    try {
+      const text = await callGemini(prompt);
+      setCaptions(previous => ({ ...previous, [order.id]: { text: text.trim(), error: null } }));
+    } catch (error) {
+      console.error('Gemini caption drafting failed:', error);
+      setCaptions(previous => ({ ...previous, [order.id]: { text: '', error: "Couldn't generate a caption - try again." } }));
+    } finally {
+      setDraftingId(null);
+    }
+  };
+
+  const copyCaption = async (text) => {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard API unavailable');
+      await navigator.clipboard.writeText(text);
+    } catch {
+      window.prompt('Copy this caption:', text);
+    }
+  };
+
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -59,20 +97,20 @@ export default function PostingTab({ orders, setPostingField }) {
         </div>
       </div>
 
-      {completedOrders.length === 0 ? <div className="bg-white rounded-xl shadow-sm overflow-hidden"><EmptyState message="No completed orders yet" /></div> : visibleOrders.length === 0 ? <div className="bg-white rounded-xl shadow-sm overflow-hidden"><EmptyState message="Nothing pending — nice work!" /></div> : <PostingCards orders={visibleOrders} setPostingField={setPostingField} />}
+      {completedOrders.length === 0 ? <div className="bg-white rounded-xl shadow-sm overflow-hidden"><EmptyState message="No completed orders yet" /></div> : visibleOrders.length === 0 ? <div className="bg-white rounded-xl shadow-sm overflow-hidden"><EmptyState message="Nothing pending — nice work!" /></div> : <PostingCards orders={visibleOrders} setPostingField={setPostingField} draftingId={draftingId} captions={captions} draftCaption={draftCaption} copyCaption={copyCaption} />}
     </section>
   );
 }
 
-function PostingCards({ orders, setPostingField }) {
+function PostingCards({ orders, setPostingField, draftingId, captions, draftCaption, copyCaption }) {
   return (
     <div className="space-y-3">
-      {orders.map(order => <PostingCard key={order.id} order={order} setPostingField={setPostingField} />)}
+      {orders.map(order => <PostingCard key={order.id} order={order} setPostingField={setPostingField} draftingId={draftingId} caption={captions[order.id]} draftCaption={draftCaption} copyCaption={copyCaption} />)}
     </div>
   );
 }
 
-function PostingCard({ order, setPostingField }) {
+function PostingCard({ order, setPostingField, draftingId, caption, draftCaption, copyCaption }) {
   const details = getProductDetailsText(order);
   const summary = getPostingSummary(order);
   const secondaryDetails = [order.contact, details, order.occasion].filter(Boolean).join(' · ');
@@ -94,6 +132,19 @@ function PostingCard({ order, setPostingField }) {
         <PostingSelect label="Story" value={order.storyStatus} onChange={value => setPostingField(order.id, 'storyStatus', value)} />
         <PostingSelect label="Reel" value={order.reelStatus} onChange={value => setPostingField(order.id, 'reelStatus', value)} />
       </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <button onClick={() => draftCaption(order)} disabled={draftingId === order.id} className="inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-70" style={{ borderColor: colors.coralLight, color: colors.coralDark, backgroundColor: 'white' }}>
+          {draftingId === order.id ? <><span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />Drafting...</> : <><Sparkles className="h-3.5 w-3.5" aria-hidden="true" />Draft Caption</>}
+        </button>
+      </div>
+      {caption?.error && <p className="mt-2 text-xs" style={{ color: colors.coralDark }}>{caption.error}</p>}
+      {caption?.text && <div className="mt-2 rounded-lg p-3" style={{ backgroundColor: colors.cream }}>
+        <div className="flex items-start gap-3">
+          <p className="min-w-0 flex-1 text-sm" style={{ color: colors.text }}>&ldquo;{caption.text}&rdquo;</p>
+          <button onClick={() => copyCaption(caption.text)} className="inline-flex shrink-0 items-center gap-1 rounded-lg border px-2 py-1 text-xs font-medium transition hover:bg-white" style={{ borderColor: colors.coralLight, color: colors.coralDark, backgroundColor: 'white' }}><Copy className="h-3.5 w-3.5" aria-hidden="true" />Copy</button>
+        </div>
+        <button onClick={() => draftCaption(order)} disabled={draftingId === order.id} className="mt-2 text-xs font-medium underline disabled:cursor-not-allowed disabled:opacity-70" style={{ color: colors.coralDark }}>Regenerate</button>
+      </div>}
     </article>
   );
 }

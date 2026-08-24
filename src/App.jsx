@@ -7,7 +7,8 @@ import ProductsTab from './components/ProductsTab';
 import PostingTab from './components/PostingTab';
 import OrderForm from './components/OrderForm';
 import DeleteConfirmModal from './components/DeleteConfirmModal';
-import { colors, getDaysLeft, getUrgency, fmtDate, getProductDetailsText } from './utils/orderHelpers';
+import QuickCommand from './components/QuickCommand';
+import { colors, getDaysLeft, getUrgency, fmtDate } from './utils/orderHelpers';
 
 export default function AlittlePartCRM() {
   const [orders, setOrders] = useState([]);
@@ -206,26 +207,15 @@ export default function AlittlePartCRM() {
   };
 
   const copyStatus = async () => {
-    const buckets = [
-      { status: 'Pending', heading: 'PENDING ORDERS' }, { status: 'In Progress', heading: 'IN PROGRESS ORDERS' },
-      { status: 'Ready', heading: 'READY ORDERS' }, { status: 'Delivered', heading: 'DELIVERED (PAYMENT PENDING)' }
-    ];
-    const formatOrder = order => {
-      const deadline = order.deadline ? fmtDate(order.deadline) : 'No deadline';
-      const details = getProductDetailsText(order);
-      return `- ${order.customerName || 'Unnamed client'} | ${order.productType || 'Unspecified product'} | ${deadline}${details ? ` | ${details}` : ''}`;
-    };
     const sortByDeadline = (a, b) => {
       const aDays = getDaysLeft(a.deadline); const bDays = getDaysLeft(b.deadline);
       if (aDays === null) return 1; if (bDays === null) return -1; return aDays - bDays;
     };
-    const sections = buckets.map(bucket => {
-      const bucketOrders = orders.filter(order => order.status === bucket.status).sort(sortByDeadline);
-      if (bucketOrders.length === 0) return '';
-      return `${bucket.heading}\n${bucketOrders.map(formatOrder).join('\n')}`;
-    }).filter(Boolean);
-    if (sections.length === 0) { alert('No active orders to share.'); return; }
-    const summary = sections.join('\n\n');
+    const pendingOrders = orders.filter(order => order.status === 'Pending').sort(sortByDeadline);
+    if (pendingOrders.length === 0) { alert('No active orders to share.'); return; }
+    const summary = pendingOrders.map(order => (
+      `${order.customerName || 'Unnamed client'} - ${order.deadline ? fmtDate(order.deadline) : 'No deadline'} - ${order.productType || 'Unspecified product'} - ${order.deliveryPlace || '-'} - ${order.occasion || '-'}`
+    )).join('\n');
     try {
       if (!navigator.clipboard?.writeText) throw new Error('Clipboard API unavailable');
       await navigator.clipboard.writeText(summary);
@@ -249,6 +239,7 @@ export default function AlittlePartCRM() {
             </div>
             <div className="hidden sm:block text-xs font-medium uppercase tracking-wide" style={{ color: colors.textLight }}>{activeTab}</div>
           </div>
+          <QuickCommand orders={orders} setSearch={setSearch} setFilterStatus={setFilterStatus} setActiveTab={setActiveTab} quickStatusChange={quickStatusChange} />
           {activeTab === 'dashboard' && <DashboardTab stats={stats} orders={orders} setActiveTab={setActiveTab} />}
           {activeTab === 'orders' && <OrdersTab filteredOrders={filteredOrders} orders={orders} search={search} setSearch={setSearch} filterStatus={filterStatus} setFilterStatus={setFilterStatus} exportCSV={exportCSV} handleBackup={handleBackup} handleRestore={handleRestore} copyStatus={copyStatus} copyStatusLabel={copyStatusLabel} viewMode={viewMode} setViewMode={setViewMode} openNewForm={openNewForm} restoreInputRef={restoreInputRef} groupedOrders={groupedOrders} openEditForm={openEditForm} setConfirmDelete={setConfirmDelete} quickStatusChange={quickStatusChange} getSourceLabel={getSourceLabel} />}
           {activeTab === 'posting' && <PostingTab orders={orders} setPostingField={setPostingField} />}
