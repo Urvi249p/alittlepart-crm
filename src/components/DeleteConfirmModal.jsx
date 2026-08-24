@@ -1,7 +1,7 @@
 import { colors } from '../utils/orderHelpers';
 
-export default function DeleteConfirmModal({ confirmDelete, handleDelete, setConfirmDelete }) {
-  if (!confirmDelete) return null;
+export default function DeleteConfirmModal({ canEdit, confirmDelete, handleDelete, setConfirmDelete }) {
+  if (!confirmDelete || !canEdit) return null;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">

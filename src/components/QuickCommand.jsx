@@ -6,7 +6,7 @@ import { colors } from '../utils/orderHelpers';
 const FILTER_STATUSES = ['all', 'urgent', 'Pending', 'In Progress', 'Ready', 'Couriered', 'Delivered', 'Completed'];
 const CHANGE_STATUSES = ['Pending', 'In Progress', 'Ready', 'Couriered', 'Delivered', 'Completed'];
 
-export default function QuickCommand({ orders, setSearch, setFilterStatus, setActiveTab, quickStatusChange }) {
+export default function QuickCommand({ canEdit, orders, setSearch, setFilterStatus, setActiveTab, quickStatusChange }) {
   const [command, setCommand] = useState('');
   const [thinking, setThinking] = useState(false);
   const [message, setMessage] = useState('');
@@ -103,7 +103,7 @@ ${trimmedCommand}`;
       {pendingConfirmation && <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-white p-3 text-sm" style={{ borderColor: colors.coralLight, color: colors.text }}>
         <span>Mark {pendingConfirmation.order.customerName || 'this client'}'s {pendingConfirmation.order.productType || 'order'} as {pendingConfirmation.newStatus}?</span>
         <div className="flex gap-2">
-          <button onClick={confirmStatusChange} className="rounded-lg px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-90" style={{ backgroundColor: colors.coral }}>Confirm</button>
+          <button onClick={confirmStatusChange} disabled={!canEdit} className="rounded-lg px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50" style={{ backgroundColor: colors.coral }}>Confirm</button>
           <button onClick={() => setPendingConfirmation(null)} className="rounded-lg border px-3 py-1.5 text-xs font-medium transition hover:bg-gray-50" style={{ borderColor: colors.coralLight, color: colors.text }}>Cancel</button>
         </div>
       </div>}
