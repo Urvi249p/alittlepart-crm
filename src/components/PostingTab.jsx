@@ -15,8 +15,8 @@ export default function PostingTab({ canEdit, orders, setPostingField }) {
       ? completedOrders.filter(order => getPostingSummary(order).tone === 'done')
       : completedOrders.filter(order => getPostingSummary(order).tone === 'pending');
     return [...list].sort((a, b) => {
-      const dateA = a.deliveryDate ? new Date(a.deliveryDate).getTime() : Number.NEGATIVE_INFINITY;
-      const dateB = b.deliveryDate ? new Date(b.deliveryDate).getTime() : Number.NEGATIVE_INFINITY;
+      const dateA = a.deadline ? new Date(a.deadline).getTime() : Number.NEGATIVE_INFINITY;
+      const dateB = b.deadline ? new Date(b.deadline).getTime() : Number.NEGATIVE_INFINITY;
       if (dateA !== dateB) return dateB - dateA;
       return String(b.id || '').localeCompare(String(a.id || ''));
     });
@@ -25,8 +25,8 @@ export default function PostingTab({ canEdit, orders, setPostingField }) {
     const pendingOrders = completedOrders
       .filter(order => getPostingSummary(order).tone === 'pending')
       .sort((a, b) => {
-        const dateA = a.deliveryDate ? new Date(a.deliveryDate).getTime() : Number.NEGATIVE_INFINITY;
-        const dateB = b.deliveryDate ? new Date(b.deliveryDate).getTime() : Number.NEGATIVE_INFINITY;
+        const dateA = a.deadline ? new Date(a.deadline).getTime() : Number.NEGATIVE_INFINITY;
+        const dateB = b.deadline ? new Date(b.deadline).getTime() : Number.NEGATIVE_INFINITY;
         if (dateA !== dateB) return dateB - dateA;
         return String(b.id || '').localeCompare(String(a.id || ''));
       });
@@ -125,7 +125,7 @@ function PostingCard({ canEdit, order, setPostingField, draftingId, caption, dra
         {secondaryDetails && <span>{secondaryDetails}</span>}
       </div>
       <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs" style={{ color: colors.textLight }}>
-        <span>Delivery: {fmtDate(order.deliveryDate)}</span>
+        <span>Deadline: {fmtDate(order.deadline)}</span>
         <span>Selling price: {order.sellingPrice ? fmtMoney(order.sellingPrice) : '-'}</span>
       </div>
       <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">

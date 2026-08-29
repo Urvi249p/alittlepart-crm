@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Boxes, Camera, LayoutDashboard, Package, PanelLeftClose, PanelLeftOpen, Users } from 'lucide-react';
+import { Boxes, Camera, LayoutDashboard, Package, PanelLeftClose, PanelLeftOpen, Users, Wallet } from 'lucide-react';
 import DashboardTab from './components/DashboardTab';
 import OrdersTab from './components/OrdersTab';
 import ClientsTab from './components/ClientsTab';
 import ProductsTab from './components/ProductsTab';
 import PostingTab from './components/PostingTab';
+import ShareExpenseTab from './components/ShareExpenseTab';
 import OrderForm from './components/OrderForm';
 import DeleteConfirmModal from './components/DeleteConfirmModal';
 import QuickCommand from './components/QuickCommand';
@@ -33,7 +34,7 @@ export default function AlittlePartCRM() {
   const emptyForm = {
     id: '', deadline: '', customerName: '', contact: '', source: '', sourceDetail: '', productType: 'Magazine',
     numberOfPages: '', quality: '', size: '', quantity: '', sellingPrice: '', cost: '', share: '', advancePaid: '',
-    deliveryPlace: '', deliveryDate: '', occasion: '', packaging: 'Regular', status: 'Pending', storyStatus: 'Pending', reelStatus: 'Pending',
+    deliveryPlace: '', occasion: '', packaging: 'Regular', status: 'Pending', storyStatus: 'Pending', reelStatus: 'Pending',
     orderDate: new Date().toISOString().split('T')[0], requirements: '', notes: ''
   };
 
@@ -128,14 +129,13 @@ export default function AlittlePartCRM() {
       if (!groups.has(key)) {
         groups.set(key, {
           customerName: order.customerName || '', contact: order.contact || '', deadline: order.deadline || '',
-          deliveryPlace: order.deliveryPlace || '', deliveryDate: order.deliveryDate || '', occasion: order.occasion || '',
+          deliveryPlace: order.deliveryPlace || '', occasion: order.occasion || '',
           orders: [], totals: { sellingPrice: 0, cost: 0, share: 0, advancePaid: 0, balance: 0 }
         });
       }
       const group = groups.get(key);
       group.orders.push(order);
       group.deliveryPlace = group.deliveryPlace === (order.deliveryPlace || '') ? group.deliveryPlace : '';
-      group.deliveryDate = group.deliveryDate === (order.deliveryDate || '') ? group.deliveryDate : '';
       group.occasion = group.occasion === (order.occasion || '') ? group.occasion : '';
       group.totals.sellingPrice += parseFloat(order.sellingPrice) || 0;
       group.totals.cost += parseFloat(order.cost) || 0;
@@ -175,6 +175,10 @@ export default function AlittlePartCRM() {
       alert('Please fill Customer Name');
       return;
     }
+    if (form.status === 'Completed' && !(parseFloat(form.share) > 0)) {
+      alert('Please add a Share amount before marking this order as Completed.');
+      return;
+    }
     const newOrders = editingOrder ? orders.map(o => o.id === form.id ? form : o) : [...orders, form];
     await saveOrderToFirestore(form);
     setOrders(newOrders);
@@ -191,6 +195,10 @@ export default function AlittlePartCRM() {
   const quickStatusChange = async (id, status) => {
     const updatedOrder = orders.find(order => order.id === id);
     if (!updatedOrder) return;
+    if (status === 'Completed' && !(parseFloat(updatedOrder.share) > 0)) {
+      alert('Please add a Share amount before marking this order as Completed. Edit the order to add it first.');
+      return;
+    }
     const orderWithUpdatedStatus = { ...updatedOrder, status };
     await saveOrderToFirestore(orderWithUpdatedStatus);
     setOrders(orders.map(order => order.id === id ? orderWithUpdatedStatus : order));
@@ -205,10 +213,10 @@ export default function AlittlePartCRM() {
   };
 
   const exportCSV = () => {
-    const headers = ['Deadline', 'Client Name', 'Contact', 'Source', 'Source Detail', 'Product Type', 'Pages', 'Selling Price', 'Cost', 'Share (Profit)', 'Advance', 'Balance', 'Delivery Place', 'Delivery Date', 'Occasion', 'Packaging', 'Status', 'Requirements', 'Notes', 'Order Date'];
+    const headers = ['Deadline', 'Client Name', 'Contact', 'Source', 'Source Detail', 'Product Type', 'Pages', 'Selling Price', 'Cost', 'Share (Profit)', 'Advance', 'Balance', 'Delivery Place', 'Occasion', 'Packaging', 'Status', 'Requirements', 'Notes', 'Order Date'];
     const rows = filteredOrders.map(o => {
       const balance = (parseFloat(o.sellingPrice) || 0) - (parseFloat(o.advancePaid) || 0);
-      return [o.deadline || '', o.customerName || '', o.contact || '', o.source || '', o.sourceDetail || '', o.productType || '', o.numberOfPages || '', o.sellingPrice || '', o.cost || '', o.share || '', o.advancePaid || '', balance, o.deliveryPlace || '', o.deliveryDate || '', o.occasion || '', o.packaging || '', o.status || '', o.requirements || '', o.notes || '', o.orderDate || ''];
+      return [o.deadline || '', o.customerName || '', o.contact || '', o.source || '', o.sourceDetail || '', o.productType || '', o.numberOfPages || '', o.sellingPrice || '', o.cost || '', o.share || '', o.advancePaid || '', balance, o.deliveryPlace || '', o.occasion || '', o.packaging || '', o.status || '', o.requirements || '', o.notes || '', o.orderDate || ''];
     });
     const csv = [headers, ...rows].map(r => r.map(cell => { const s = String(cell).replace(/"/g, '""'); return /[",\n]/.test(s) ? `"${s}"` : s; }).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -289,6 +297,7 @@ export default function AlittlePartCRM() {
           {activeTab === 'dashboard' && <DashboardTab stats={stats} orders={orders} setActiveTab={setActiveTab} />}
           {activeTab === 'orders' && <OrdersTab canEdit={Boolean(user)} filteredOrders={filteredOrders} orders={orders} search={search} setSearch={setSearch} filterStatus={filterStatus} setFilterStatus={setFilterStatus} exportCSV={exportCSV} handleBackup={handleBackup} handleRestore={handleRestore} copyStatus={copyStatus} copyStatusLabel={copyStatusLabel} viewMode={viewMode} setViewMode={setViewMode} openNewForm={openNewForm} restoreInputRef={restoreInputRef} groupedOrders={groupedOrders} openEditForm={openEditForm} setConfirmDelete={setConfirmDelete} quickStatusChange={quickStatusChange} getSourceLabel={getSourceLabel} />}
           {activeTab === 'posting' && <PostingTab canEdit={Boolean(user)} orders={orders} setPostingField={setPostingField} />}
+          {activeTab === 'expenses' && <ShareExpenseTab canEdit={Boolean(user)} orders={orders} />}
           {activeTab === 'clients' && <ClientsTab canEdit={Boolean(user)} orders={orders} setSearch={setSearch} setActiveTab={setActiveTab} />}
           {activeTab === 'products' && <ProductsTab orders={orders} />}
         </div>
@@ -354,6 +363,7 @@ function Sidebar({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen }) {
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'orders', label: 'Orders', icon: Package },
     { id: 'posting', label: 'Posting', icon: Camera },
+    { id: 'expenses', label: 'Share Expense', icon: Wallet },
     { id: 'clients', label: 'Clients', icon: Users },
     { id: 'products', label: 'Products', icon: Boxes }
   ];
