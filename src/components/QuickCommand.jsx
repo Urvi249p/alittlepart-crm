@@ -76,7 +76,7 @@ ${trimmedCommand}`;
   const confirmStatusChange = async () => {
     if (!pendingConfirmation) return;
     const { order, newStatus } = pendingConfirmation;
-    if (newStatus === 'Completed' && !(parseFloat(order.share) > 0)) {
+    if (newStatus === 'Completed' && (order.share === '' || order.share === null || order.share === undefined || isNaN(parseFloat(order.share)))) {
       setMessage('This order has no Share amount — edit it first before marking Completed.');
       setPendingConfirmation(null);
       return;

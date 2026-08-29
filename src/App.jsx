@@ -175,7 +175,7 @@ export default function AlittlePartCRM() {
       alert('Please fill Customer Name');
       return;
     }
-    if (form.status === 'Completed' && !(parseFloat(form.share) > 0)) {
+    if (form.status === 'Completed' && (form.share === '' || form.share === null || form.share === undefined || isNaN(parseFloat(form.share)))) {
       alert('Please add a Share amount before marking this order as Completed.');
       return;
     }
@@ -195,7 +195,7 @@ export default function AlittlePartCRM() {
   const quickStatusChange = async (id, status) => {
     const updatedOrder = orders.find(order => order.id === id);
     if (!updatedOrder) return;
-    if (status === 'Completed' && !(parseFloat(updatedOrder.share) > 0)) {
+    if (status === 'Completed' && (updatedOrder.share === '' || updatedOrder.share === null || updatedOrder.share === undefined || isNaN(parseFloat(updatedOrder.share)))) {
       alert('Please add a Share amount before marking this order as Completed. Edit the order to add it first.');
       return;
     }
